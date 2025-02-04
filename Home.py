@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from feature_engineering import create_features
 import os
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+import xgboost as xgb
 
 # Set page config
 st.set_page_config(
@@ -51,6 +54,62 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+def train_and_save_model():
+    """Train a new model and save it if model files are not found."""
+    try:
+        st.info("Model files not found. Training new model...")
+        
+        # Load and prepare data
+        data = pd.read_csv('thyroid_cancer_risk_data.csv')
+        
+        # Apply feature engineering
+        data = create_features(data)
+        
+        # Split features and target
+        X = data.drop('Cancer', axis=1)
+        y = data['Cancer']
+        
+        # Get list of categorical and numerical columns
+        categorical_cols = X.select_dtypes(include=['object', 'category']).columns
+        numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
+        
+        # Initialize preprocessors
+        scaler = StandardScaler()
+        le = LabelEncoder()
+        
+        # Process categorical columns
+        X_processed = X.copy()
+        for col in categorical_cols:
+            X_processed[col] = le.fit_transform(X_processed[col])
+        
+        # Scale numerical features
+        X_processed[numerical_cols] = scaler.fit_transform(X_processed[numerical_cols])
+        
+        # Train a simple XGBoost model
+        model = xgb.XGBClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=4,
+            random_state=42
+        )
+        model.fit(X_processed, y)
+        
+        # Save all necessary files
+        os.makedirs('models', exist_ok=True)
+        
+        joblib.dump(model, os.path.join('models', 'best_thyroid_model.joblib'))
+        joblib.dump(scaler, os.path.join('models', 'scaler.joblib'))
+        joblib.dump(le, os.path.join('models', 'label_encoder.joblib'))
+        joblib.dump(X_processed.columns.tolist(), os.path.join('models', 'selected_features.joblib'))
+        joblib.dump(X.columns.tolist(), os.path.join('models', 'feature_names.joblib'))
+        
+        st.success("New model trained and saved successfully!")
+        return model, scaler, le, X_processed.columns.tolist(), X.columns.tolist()
+        
+    except Exception as e:
+        st.error(f"Error training model: {str(e)}")
+        return None, None, None, None, None
+
 # Load the models and preprocessors
 @st.cache_resource
 def load_models():
@@ -90,7 +149,11 @@ def load_models():
                 continue
         
         if model is None:
-            raise FileNotFoundError("Could not find model files in any of the expected locations")
+            # If model files are not found, train a new model
+            model, scaler, le, selected_features, feature_names = train_and_save_model()
+            
+        if model is None:
+            raise FileNotFoundError("Could not find or train model files")
             
         return model, scaler, le, selected_features, feature_names
     except Exception as e:
