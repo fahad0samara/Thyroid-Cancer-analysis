@@ -23,11 +23,6 @@ wheels/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Model files
-*.joblib
-*.pkl
-*.h5
-
 # Environment
 .env
 .venv

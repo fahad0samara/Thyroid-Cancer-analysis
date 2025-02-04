@@ -8,6 +8,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import seaborn as sns
 from feature_engineering import create_features
+import os
 
 # Set page config
 st.set_page_config(
@@ -54,17 +55,65 @@ st.markdown("""
 @st.cache_resource
 def load_models():
     try:
-        model = joblib.load('best_thyroid_model.joblib')
-        scaler = joblib.load('scaler.joblib')
-        le = joblib.load('label_encoder.joblib')
-        selected_features = joblib.load('selected_features.joblib')
-        feature_names = joblib.load('feature_names.joblib')
+        # List of possible model paths
+        possible_paths = [
+            '.',  # Current directory
+            'models',  # Models subdirectory
+            os.path.join(os.path.dirname(__file__)),  # Script directory
+            os.path.join(os.path.dirname(__file__), 'models')  # Script's models subdirectory
+        ]
+        
+        model = None
+        scaler = None
+        le = None
+        selected_features = None
+        feature_names = None
+        
+        # Try each path
+        for base_path in possible_paths:
+            try:
+                model_path = os.path.join(base_path, 'best_thyroid_model.joblib')
+                scaler_path = os.path.join(base_path, 'scaler.joblib')
+                le_path = os.path.join(base_path, 'label_encoder.joblib')
+                features_path = os.path.join(base_path, 'selected_features.joblib')
+                names_path = os.path.join(base_path, 'feature_names.joblib')
+                
+                if os.path.exists(model_path):
+                    model = joblib.load(model_path)
+                    scaler = joblib.load(scaler_path)
+                    le = joblib.load(le_path)
+                    selected_features = joblib.load(features_path)
+                    feature_names = joblib.load(names_path)
+                    st.success(f"Models loaded successfully from {base_path}")
+                    break
+            except Exception as e:
+                continue
+        
+        if model is None:
+            raise FileNotFoundError("Could not find model files in any of the expected locations")
+            
         return model, scaler, le, selected_features, feature_names
     except Exception as e:
         st.error(f"Error loading models: {str(e)}")
+        st.error("Searched in paths: " + ", ".join(possible_paths))
         return None, None, None, None, None
 
 model, scaler, le, selected_features, feature_names = load_models()
+
+# Create a models directory if it doesn't exist
+if not os.path.exists('models'):
+    os.makedirs('models')
+    
+# Save models to the models directory
+try:
+    if model is not None:
+        joblib.dump(model, os.path.join('models', 'best_thyroid_model.joblib'))
+        joblib.dump(scaler, os.path.join('models', 'scaler.joblib'))
+        joblib.dump(le, os.path.join('models', 'label_encoder.joblib'))
+        joblib.dump(selected_features, os.path.join('models', 'selected_features.joblib'))
+        joblib.dump(feature_names, os.path.join('models', 'feature_names.joblib'))
+except Exception as e:
+    st.warning(f"Could not save models to models directory: {str(e)}")
 
 # Title and description
 st.title("🏥 Thyroid Cancer Risk Assessment")
